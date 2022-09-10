@@ -90,5 +90,5 @@ def KeyGen():
             GcdResult = math.gcd(e, Totient) #Verify if Exponent and Totient are coprimes
 
     d = pow(e, -1, Totient) # Gets the multiplicative inverse
-    return e, d
+    return n, e, d
 

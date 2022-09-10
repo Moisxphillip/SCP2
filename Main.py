@@ -6,8 +6,13 @@ import AES_CTR
 
 KeySize = 16
 
+def RSACypher():
+    SessionKey = secrets.token_bytes(KeySize)
+
+
+
 def main():
-    e, d = RSA_Keygen.KeyGen() #takes N, private and public key
+    n, e, d = RSA_Keygen.KeyGen() #takes N, private and public key
     print("Public Key: " + str(e))
     print()
     print("Private Key: " + str(d))
