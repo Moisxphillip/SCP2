@@ -65,8 +65,10 @@ def main():
 
     Content = BytesToText(Data)
     print(Content)
-
-
+#_______________________________
+def KeyExpansion():
+#[]-> [][][][][][][][][][]+[]
+    return #TODO bytes expandidos
 #_______________________________
 def BytesToMatrix(Bytes):
     Matrix = []
@@ -130,7 +132,6 @@ def MixColumns(Data):
             ResultMatrix[i].append(Column[i]) #Prepare processed result
     return ResultMatrix
 
-
 #_______________________________
 def AddRoundKeys(Block, Key):
     for i in range(len(Block)):
@@ -139,12 +140,13 @@ def AddRoundKeys(Block, Key):
 
 #_______________________________
 def BlockProcessing(Block, Key):
+    #TODO expand key for the next iteration
     for i in range(EncryptionRounds):
         Block = SubBytes(Block, BytesSbox)
         Block = ShiftRows(Block)
         if not (i == EncryptionRounds - 1): #Columns aren't mixed in the final step
             Block = MatrixToBytes(MixColumns(BytesToMatrix(Block)))#Converts for operating, Mix and turn back into Bytes
-        Block = AddRoundKeys(Block, Key)
+        Block = AddRoundKeys(Block, Key) #TODO send expansion for actual round instead
     return Block
 
 #_______________________________
@@ -158,7 +160,9 @@ def Encrypt(Data, Key):
 
 #_______________________________
 def BlockReversion(Block, Key): #basically functions above but in the other direction :D
+    #TODO expand key for the next iteration. KeyRounds = KeyExpansion()
     for i in range(EncryptionRounds):
+        #TODO send expansion for actual round instead
         Block = AddRoundKeys(Block, Key) #Reverses the XOR
         if not (i == 0): #Columns aren't unmixed in the first step
             for j in range(3):
@@ -166,8 +170,7 @@ def BlockReversion(Block, Key): #basically functions above but in the other dire
         for j in range(3):
             Block = (ShiftRows(Block)) #number 3 is helpful again on fixing stuff
         Block = SubBytes(Block, BytesInvSbox) #The reference table is the reversed one now
-    return Block
-
+    return Block#TODO, Key for expansion on next round
 #_______________________________
 def Decrypt(Data, Key):
     i = 0 #init index for avoiding an annoying glitch
