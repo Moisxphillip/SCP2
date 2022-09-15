@@ -84,28 +84,32 @@ def subWord(temp):
     
 # Rotates the word one byte to left
 def rotWord(temp):
-    return temp[1:] + temp[0:1]
+    aux = temp[0];
+    temp[0] = temp[1];
+    temp[1] = temp[2];
+    temp[2] = temp[3];
+    temp[3] = aux;
+
+    return temp
     
 def KeyExpansion(Key):
     #[]-> [][][][][][][][][][]+[]
-    roundKeys = []
+    roundKeys = [()]
     temp = 0
 
     #dividing a block to 4 subblocks
-    for i in Key:
-        roundKeys.append(i[:])
+    for i in range(BlockKey):
+        roundKeys[i] = (Key[4 * i], Key[4 * i + 1], Key[4 * i + 2],
+                          Key[4 * i + 3]);
     
     for i in range(BlockKey, BlockSize * (EncryptionRounds + 1)):
-        temp = roundKeys[i - 1][:]
+        temp = roundKeys[i - 1]
 
         if (i % BlockKey == 0):
             temp = subWord(rotWord(temp))
-            temp[0] ^= Rcon[(i//BlockSize)]
+            temp ^= Rcon[(i/BlockSize)]
 
-        for j in range(len(temp)):
-            temp[j] ^= roundKeys[i - BlockKey][j]
-
-        roundKeys.append(temp[:])
+        roundKeys[i] = roundKeys[i - BlockKey] ^ temp
     
     return roundKeys #TODO bytes expandidos
   
