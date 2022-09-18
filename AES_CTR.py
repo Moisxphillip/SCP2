@@ -1,6 +1,7 @@
 import math
 import random
 import sys
+import secrets
 import hashlib #used for SHA-3 hash function
 if (sys.version_info < (3, 6)):
     import sha3 #used for SHA-3 hash function in older systems
@@ -8,6 +9,7 @@ if (sys.version_info < (3, 6)):
 #_______________________________ Global Variables
 KeyLength = 16 #Value in bytes
 EncryptionRounds = 10
+Counter = 0;
 
 FwSbox = [0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
           0xCA, 0x82, 0xC9, 0x7D, 0xFA, 0x59, 0x47, 0xF0, 0xAD, 0xD4, 0xA2, 0xAF, 0x9C, 0xA4, 0x72, 0xC0,
@@ -75,43 +77,58 @@ def main():
 
     Content = BytesToText(Data)
     print(Content)
-#_______________________________
 
-# Transforms each of the 4 bytes of the word 
-# according to the FwSbox, generating a word of 4 bytes.
-def subWord(temp):
-    return [FwSbox[i] for i in temp]
-    
-# Rotates the word one byte to left
-def rotWord(temp):
-    aux = temp[0];
-    temp[0] = temp[1];
-    temp[1] = temp[2];
-    temp[2] = temp[3];
-    temp[3] = aux;
+#____________________________
+def SubWord(temp): #Substitutions based on FwSbox
+    toby = bytearray()
+    for i in range(4):
+        toby += bytearray(int.to_bytes(temp[i],4, byteorder='big'))
+    return [FwSbox[i] for i in toby]#according to the FwSbox, generates a word of 4 bytes.
 
-    return temp
+#____________________________
+def RotWord(temp): #Rotates the word one byte to left
+    return [temp[1], temp[2], temp[3], temp[0]]
+
+#____________________________
+def ColToRow(Arr): #Byte spinning
+    item = bytearray()
+    k = 3
+    for i in range(4):
+        k = 3-i
+        for j in range(4):
+            item+=int.to_bytes(Arr[k], 1, byteorder='big')
+            k+=4
+        k-=1
+    return item
     
+#____________________________
+def ByteToWord(Vec):
+    return [int.from_bytes(Vec[0:4], byteorder='big'),
+    int.from_bytes(Vec[4:8], byteorder='big'),
+    int.from_bytes(Vec[8:12], byteorder='big'),
+    int.from_bytes(Vec[12:16], byteorder='big')]
+
+#____________________________
 def KeyExpansion(Key):
     #[]-> [][][][][][][][][][]+[]
-    roundKeys = [()]
-    temp = 0
+    roundKeys = [[0,0,0,0]]
+    Key = ColToRow(Key)
+    temp = ByteToWord(Key)
+    for w in range(4):
+        roundKeys[0][w] = temp[w]#places the matrix-spinned key in the reference position
 
-    #dividing a block to 4 subblocks
-    for i in range(BlockKey):
-        roundKeys[i] = (Key[4 * i], Key[4 * i + 1], Key[4 * i + 2],
-                          Key[4 * i + 3]);
-    
-    for i in range(BlockKey, BlockSize * (EncryptionRounds + 1)):
-        temp = roundKeys[i - 1]
+    for i in range(EncryptionRounds+1): #Cycles of expansion start here       
+        temp = roundKeys[i-1]#Key to be modified = last key
+        if (i&3 == 0): #Modifies the first position as the algorithm asks for
+            temp = SubWord(RotWord(temp))#Rot+Sub operations
+            temp = [int.from_bytes(temp[4*k:4*(k+1)],byteorder='big') for k in range(4)]
+            temp2 = bytearray(int.to_bytes(temp[0],4, byteorder='big')) #breaks word so xor Rcon can be applied on first byte
+            temp3=temp2[0]^Rcon[(i)]
+            temp2[0] = temp3
+            temp[0] = int.from_bytes(temp2[0:4], byteorder='big')#Turns back into int
 
-        if (i % BlockKey == 0):
-            temp = subWord(rotWord(temp))
-            temp ^= Rcon[(i/BlockSize)]
-
-        roundKeys[i] = roundKeys[i - BlockKey] ^ temp
-    
-    return roundKeys #TODO bytes expandidos
+        roundKeys+= [[roundKeys[i][j-1]^temp[j] for j in range(4)]]
+    return roundKeys[1:12] #Returning 11*4 bytes of fresh keys
   
 #_______________________________
 def BytesToMatrix(Bytes):
@@ -165,7 +182,6 @@ def SingleMix(Column):
               MultX2(Column[2]) ^ MultX3(Column[3]) ^ Column[0] ^ Column[1],
               MultX2(Column[3]) ^ MultX3(Column[0]) ^ Column[1] ^ Column[2],]
     return Result
-
 #_______________________________
 def MixColumns(Data):
     ResultMatrix = [[], [], [], []] #Empty for collecting stuff
@@ -183,47 +199,67 @@ def AddRoundKeys(Block, Key):
     return Block
 
 #_______________________________
+def XorBlocks(Data, Enc):
+    return bytes([Data[i] ^ Enc[i] for i in range(len(Data))])
+
+#_______________________________
+def IncreaseCtr(Counter):
+    NewCtr = int.from_bytes(Counter, byteorder='big') #converts to int, increases and converts back to bytes
+    NewCtr+=1
+    return NewCtr.to_bytes(max(1, math.ceil(NewCtr.bit_length()/8)), byteorder='big')
+
+#_______________________________
 def BlockProcessing(Block, Key):
-    #TODO expand key for the next iteration
-    for i in range(EncryptionRounds):
+    for i in range(EncryptionRounds): #SubBytes->ShiftRows->MixColumns(Exceto último round)->RoundKeys
         Block = SubBytes(Block, BytesSbox)
         Block = ShiftRows(Block)
         if not (i == EncryptionRounds - 1): #Columns aren't mixed in the final step
             Block = MatrixToBytes(MixColumns(BytesToMatrix(Block)))#Converts for operating, Mix and turn back into Bytes
-        Block = AddRoundKeys(Block, Key) #TODO send expansion for actual round instead
-    return Block
 
+        temp = bytearray()#Conversion before xor with key
+        for j in range(4):
+            temp+= bytearray(int.to_bytes(Key[i][j], 4, byteorder='big'))
+        Block = AddRoundKeys(Block, temp)
+
+    return Block
 #_______________________________
 def Encrypt(Data, Key):
     i = 0 #init index for avoiding an annoying glitch
+    global Counter
+    if Counter == 0:
+        Counter = secrets.token_bytes(16) #Generate random base counter
+    LocalCtr = Counter #copy of counter to be altered during process
     Result = bytearray()
+    Key = KeyExpansion(Key)
+
     while (i < len(Data)):
-        Result+= bytearray(BlockProcessing(Data[i:i+16], Key)) #Treats and adds processed block to encrypted file
+        CtrEnc = bytearray(BlockProcessing(bytearray(LocalCtr), Key)) #Treats and adds processed block to encrypted file
+        Result+= XorBlocks(Data[i:i+16], CtrEnc)#CTR encription happens here
+        LocalCtr = IncreaseCtr(LocalCtr)
+
+        temp = bytearray()
+        for j in range(4):
+            temp+= bytearray(int.to_bytes(Key[EncryptionRounds][j], 4, byteorder='big'))
+        Key = KeyExpansion(temp)#converts []-> [][][][][][][][][][]+[]
         i += 16 #Skips to the next 16-bytes block
     return Result
 
 #_______________________________
-def BlockReversion(Block, Key): #basically functions above but in the other direction :D
-    #TODO expand key for the next iteration. KeyRounds = KeyExpansion()
-    KeyExpansion(Key)
-    for i in range(EncryptionRounds):
-        #TODO send expansion for actual round instead
-        
-        Block = AddRoundKeys(Block, Key) #Reverses the XOR
-        if not (i == 0): #Columns aren't unmixed in the first step
-            for j in range(3):
-                Block = MatrixToBytes(MixColumns(BytesToMatrix(Block))) #Doing it 3 times reverses it, trust me
-        for j in range(3):
-            Block = (ShiftRows(Block)) #number 3 is helpful again on fixing stuff
-        Block = SubBytes(Block, BytesInvSbox) #The reference table is the reversed one now
-    return Block#TODO, Key for expansion on next round
-#_______________________________
 def Decrypt(Data, Key):
     i = 0 #init index for avoiding an annoying glitch
+    global Counter
+    LocalCtr = Counter #copy of counter to be altered
     Result = bytearray()
+    Key = KeyExpansion(Key)
+
     while (i < len(Data)):
-        Temp = Data[i:i+16]
-        Result+= bytearray(BlockReversion(Temp, Key))
+        CtrDec = bytearray(BlockProcessing(bytearray(LocalCtr), Key))
+        Result+= XorBlocks(Data[i:i+16], CtrDec)
+        LocalCtr = IncreaseCtr(LocalCtr)
+        temp = bytearray()
+        for j in range(4):
+            temp+= bytearray(int.to_bytes(Key[EncryptionRounds][j], 4, byteorder='big'))
+        Key = KeyExpansion(temp)
         i += 16 #Skips to the next 16-bytes block
     return Result
 
@@ -243,12 +279,21 @@ def TextToBytes(Text):
     Bytes = bytes(Text, "ISO-8859-1") #Turns text into byte array
     Bytes = Padding(Bytes) #does padding for encription integrity
     return Bytes
-
+#_______________________________
+def FileToBytes(Name):
+    Bytes = bytes(Name, "ISO-8859-1") #TODO load as file
+    Bytes = Padding(Bytes) #does padding for encription integrity
+    return Bytes
 #_______________________________
 def BytesToText(Bytes):
     Bytes = Unpadding(Bytes) #undoes padding for recovering text integrity
     Text = Bytes.decode("ISO-8859-1") #Bytes are interpreted as text again
     return Text
+#_______________________________
+def BytesToFile(Bytes):
+    Bytes = Unpadding(Bytes) #undoes padding for recovering text integrity
+    File = Bytes.decode("ISO-8859-1") #TODO load as file
+    return File
 
 #_______________________________
 def CalculateHash(Bytes):
