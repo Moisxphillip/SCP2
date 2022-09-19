@@ -19,19 +19,19 @@ FirstPrimes = [2,   3,   5,   7,  11,  13,  17,  19,  23,  29,
 
 #_______________________________Functions
 def RSAEncryption(Message, e, n):
-    MessageInBytes = bytes(Message, "ISO-8859-1") #Convert string to bytes
-    BytesInInt = int.from_bytes(MessageInBytes, "big") #Convert bytes to int
+    #MessageInBytes = bytes(Message, "ISO-8859-1") #Convert string to bytes
+    BytesInInt = int.from_bytes(Message, "big") #Convert bytes to int
     Conversion = (pow(BytesInInt, e, n))
     Output = Conversion.to_bytes((Conversion.bit_length() + 7) // 8, "big")
-    return Output.decode("ISO-8859-1")
+    return Output#.decode("ISO-8859-1")
 
 #_______________________________
 def RSADecryption(Cypher, d, n):
-    CypherInBytes = bytes(Cypher, "ISO-8859-1") #Convert string to bytes
-    BytesInInt = int.from_bytes(CypherInBytes, "big") #Convert bytes to int
+    #CypherInBytes = bytes(Cypher, "ISO-8859-1") #Convert string to bytes
+    BytesInInt = int.from_bytes(Cypher, "big") #Convert bytes to int
     Conversion = (pow(BytesInInt, d, n))
     Output = Conversion.to_bytes((Conversion.bit_length() + 7) // 8, "big")
-    return Output.decode("ISO-8859-1")
+    return Output#.decode("ISO-8859-1")
 
 #_______________________________
 def GetPrime(n):
@@ -72,7 +72,7 @@ def MillerRabinUnit(n, a):
 #_______________________________
 def NBitsRandomNumber(n):
     # Returns an odd random number on the specified range
-    return((random.randrange(2**(n-2)+1, 2**n-2) << 1 ) + 1)
+    return((random.randrange(2**(n-2)+1, 2**n-2)) + 1)
 
 #_______________________________
 def KeyGen():
